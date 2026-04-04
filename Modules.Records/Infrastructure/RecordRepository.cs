@@ -1,8 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Modules.Records.Application.Interfaces;
 using Modules.Records.Domain;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 
 
@@ -15,10 +17,44 @@ namespace Modules.Records.Infrastructure
         {
             this._db = db;
         }
+        //public async Task AddRangeAsync(List<Record> records)
+        //{
+        //    _db.Records.AddRangeAsync(records);
+        //    _db.SaveChangesAsync();            
+        //}
+
         public async Task AddRangeAsync(List<Record> records)
         {
-            _db.Records.AddRangeAsync(records);
-            _db.SaveChangesAsync();            
+            var table = new DataTable();
+
+            table.Columns.Add("Id", typeof(Guid));
+            table.Columns.Add("Name", typeof(string));
+            table.Columns.Add("Email", typeof(string));
+            table.Columns.Add("Status", typeof(string));
+            table.Columns.Add("ProcessedAt", typeof(DateTime));
+
+            foreach (var r in records)
+            {
+                table.Rows.Add(
+                    r.Id,
+                    r.Name,
+                    r.Email,
+                    r.Status,
+                    r.ProcessedAt ?? (object)DBNull.Value
+                );
+            }
+
+            var connection = (SqlConnection)_db.Database.GetDbConnection();
+
+            if (connection.State != ConnectionState.Open)
+                await connection.OpenAsync();
+
+            using var bulkCopy = new SqlBulkCopy(connection)
+            {
+                DestinationTableName = "Records"
+            };
+
+            await bulkCopy.WriteToServerAsync(table);
         }
 
         public  Task<int> GetProcessedCountAsync()
