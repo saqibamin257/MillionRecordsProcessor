@@ -9,7 +9,8 @@ namespace ExternalApiSimulator.Controllers
     [ApiController]
     public class DataController : ControllerBase
     {
-        private const int TOTAL_RECORDS = 1_000_000; // simulate 1 million
+        //private const int TOTAL_RECORDS = 1_000_000; // simulate 1 million
+        private const int TOTAL_RECORDS = 20000; // simulate 1 million
 
         [HttpGet]
         public IActionResult Get(int page = 1, int pageSize = 1000)
