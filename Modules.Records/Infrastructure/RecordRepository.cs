@@ -1,6 +1,7 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Modules.Records.Application.Interfaces;
 using Modules.Records.Domain;
 using System;
@@ -15,71 +16,14 @@ namespace Modules.Records.Infrastructure
 {
     public class RecordRepository : IRecordRepository
     {
+        
         private readonly RecordsDbContext _db;
-        public RecordRepository(RecordsDbContext db) 
+        private readonly ILogger<RecordRepository> _logger;
+        public RecordRepository(RecordsDbContext db, ILogger<RecordRepository> logger) 
         {
             this._db = db;
+            this._logger = logger;
         }
-
-        //public async Task AddRangeAsync(List<Record> records)
-        //{
-        //    var table = new DataTable();
-
-        //    table.Columns.Add("Id", typeof(Guid));
-        //    table.Columns.Add("Name", typeof(string));
-        //    table.Columns.Add("Email", typeof(string));
-        //    table.Columns.Add("Status", typeof(string));
-        //    table.Columns.Add("ProcessedAt", typeof(DateTime));
-
-        //    foreach (var r in records)
-        //    {
-        //        table.Rows.Add(
-        //            r.Id,
-        //            r.Name,
-        //            r.Email,
-        //            r.Status,
-        //            r.ProcessedAt ?? (object)DBNull.Value
-        //        );
-        //    }
-
-        //    var connection = (SqlConnection)_db.Database.GetDbConnection();
-
-        //    if (connection.State != ConnectionState.Open)
-        //        await connection.OpenAsync();
-
-        //    using var transaction = await _db.Database.BeginTransactionAsync();
-        //    var dbTransaction = (SqlTransaction)transaction.GetDbTransaction();
-
-        //    using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, dbTransaction)
-        //    {
-        //        DestinationTableName = "Records_Staging"
-        //    };
-
-        //    try
-        //    {
-        //        //Bulk insert → staging
-        //        await bulkCopy.WriteToServerAsync(table);
-
-        //        //Insert only new records
-        //        await _db.Database.ExecuteSqlRawAsync(@"
-        //                                    INSERT INTO Records (Id, Name, Email, Status, ProcessedAt)
-        //                                    SELECT s.Id, s.Name, s.Email, s.Status, s.ProcessedAt
-        //                                    FROM Records_Staging s
-        //                                    LEFT JOIN Records r ON r.Email = s.Email
-        //                                    WHERE r.Email IS NULL
-        //                                ");
-        //        //Clear staging
-        //        await _db.Database.ExecuteSqlRawAsync("TRUNCATE TABLE Records_Staging");
-        //        await transaction.CommitAsync();
-        //    }
-        //    catch (Exception ex) 
-        //    {
-        //        await transaction.RollbackAsync();
-        //        throw;
-        //    }            
-        //}
-
-
         public async Task AddRangeAsync(List<Record> records)
         {
             var table = new DataTable();
@@ -131,15 +75,12 @@ namespace Modules.Records.Infrastructure
 
                 // 3. Clear staging
                 await _db.Database.ExecuteSqlRawAsync("DELETE FROM Records_Staging");
-
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-
-                //_logger.LogError(ex, "Error while bulk inserting records batch. Count: {Count}", records.Count);
-
+                _logger.LogError(ex, "Error while bulk inserting records batch. Count: {Count}", records.Count);
                 //throw;
             }
         }

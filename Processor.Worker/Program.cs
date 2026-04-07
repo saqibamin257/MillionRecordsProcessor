@@ -1,44 +1,13 @@
-﻿//using Hangfire;
-//using Modules.Processing.Application;
-//using Modules.Records.Infrastructure;
-//using Processor.Worker;
-//using Processor.Worker.Jobs;
-
-//var builder = Host.CreateApplicationBuilder(args);
-//builder.Services.AddHostedService<Worker>();
-
-//builder.Services.AddHttpClient("external", client =>
-//{
-//    client.BaseAddress = new Uri("https://localhost:5227/");
-//});
-
-
-//builder.Services.AddHangfire(config =>
-//    config.UseSqlServerStorage(
-//        builder.Configuration.GetConnectionString("Default")));
-
-//builder.Services.AddHangfireServer();
-
-//builder.Services.AddScoped<ProcessingJobs>();
-
-
-//builder.Services.AddProcessingModule();
-//builder.Services.AddRecordsModule(
-//builder.Configuration.GetConnectionString("Default"));
-
-
-////var host = builder.Build();
-////host.Run();
-
-
-using Hangfire;
+﻿using Hangfire;
 using Hangfire.SqlServer;
 using Modules.Processing.Application;
 using Modules.Processing.Application.Jobs;
 using Modules.Processing.Application.Services;
 using Modules.Records.Infrastructure;
-//using Processor.Worker.Jobs;
+using Serilog;
 
+
+//using Processor.Worker.Jobs;
 var builder = Host.CreateApplicationBuilder(args);
 
 // 🔹 Get connection string
@@ -57,9 +26,26 @@ builder.Services.AddRecordsModule(connectionString);
 // 🔹 Register jobs
 builder.Services.AddScoped<ProcessingJobs>();
 
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information() // 👈 only errors globally
+    .WriteTo.Console()    // optional (can keep info)
+    .WriteTo.File(
+        "logs/error-log-.txt",
+        rollingInterval: RollingInterval.Day,
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Error, // 👈 only errors in file
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}"
+    )
+    .CreateLogger();
+
+// Plug Serilog into logging pipeline
+builder.Logging.ClearProviders();
+builder.Logging.AddSerilog();
+
+
+
 var app = builder.Build();
-
-
 
 // 🔥 REGISTER RECURRING JOBS HERE (IMPORTANT)
 using (var scope = app.Services.CreateScope())
@@ -79,5 +65,4 @@ using (var scope = app.Services.CreateScope())
         "*/10 * * * *"
     );
 }
-
 app.Run();

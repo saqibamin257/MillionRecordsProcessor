@@ -1,7 +1,7 @@
-using Hangfire;
+﻿using Hangfire;
 using Modules.Records.Application.Interfaces;
 using Modules.Records.Infrastructure;
-
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +29,18 @@ builder.Services.AddCors(options =>
                         .AllowAnyMethod());
 });
 
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information() // 👈 only errors globally
+    .WriteTo.Console()    // optional (can keep info)
+    .WriteTo.File(
+        "logs/error-log-.txt",
+        rollingInterval: RollingInterval.Day,
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Error, // 👈 only errors in file
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}"
+    )
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 var app = builder.Build();
 
@@ -49,8 +61,6 @@ app.MapGet("/stats", async (IRecordRepository repo) =>
         failed
     };
 });
-
-
 
 
 // Configure the HTTP request pipeline.
