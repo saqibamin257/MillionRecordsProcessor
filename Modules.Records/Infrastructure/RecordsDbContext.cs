@@ -10,6 +10,7 @@ namespace Modules.Records.Infrastructure
     {
         //public DbSet<Record> Records { get; set; }
         public DbSet<Record> Records => Set<Record>();
+        public DbSet<ProcessingLog> ProcessingLogs => Set<ProcessingLog>();
         public RecordsDbContext(DbContextOptions<RecordsDbContext> options)
         : base(options)
         {
@@ -31,6 +32,11 @@ namespace Modules.Records.Infrastructure
 
                 entity.Property(x => x.Status)
                     .HasMaxLength(50);
+            });
+
+            modelBuilder.Entity<ProcessingLog>(entity =>
+            {
+                entity.HasKey(x => x.Id);
             });
         }
     }

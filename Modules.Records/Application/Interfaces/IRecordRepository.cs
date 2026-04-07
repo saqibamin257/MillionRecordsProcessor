@@ -10,5 +10,10 @@ namespace Modules.Records.Application.Interfaces
         Task AddRangeAsync(List<Record> records);
         Task<int> GetTotalCountAsync();
         Task<int> GetProcessedCountAsync();
+        Task AddLogsAsync(List<ProcessingLog> logs);
+
+        Task<List<ProcessingLog>> GetFailedLogsAsync();
+        Task<Record?> GetByIdAsync(Guid id);
+        Task UpdateLogsAsync(List<ProcessingLog> logs);
     }
 }

@@ -17,12 +17,7 @@ namespace Modules.Records.Infrastructure
         {
             this._db = db;
         }
-        //public async Task AddRangeAsync(List<Record> records)
-        //{
-        //    _db.Records.AddRangeAsync(records);
-        //    _db.SaveChangesAsync();            
-        //}
-
+        
         public async Task AddRangeAsync(List<Record> records)
         {
             var table = new DataTable();
@@ -65,6 +60,28 @@ namespace Modules.Records.Infrastructure
         public Task<int> GetTotalCountAsync()
         {
             return _db.Records.CountAsync();
+        }
+        public async Task AddLogsAsync(List<ProcessingLog> logs)
+        {
+            await _db.ProcessingLogs.AddRangeAsync(logs);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task<List<ProcessingLog>> GetFailedLogsAsync()
+        {
+            return await _db.ProcessingLogs
+                .Where(x => x.Status == "Failed" && x.RetryCount < 3)
+                .ToListAsync();
+        }
+        public async Task<Record?> GetByIdAsync(Guid id)
+        {
+            return await _db.Records.FindAsync(id);
+        }
+
+        public async Task UpdateLogsAsync(List<ProcessingLog> logs)
+        {
+            _db.ProcessingLogs.UpdateRange(logs);
+            await _db.SaveChangesAsync();
         }
     }
 }

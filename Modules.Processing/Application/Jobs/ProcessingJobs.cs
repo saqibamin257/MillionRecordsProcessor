@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Processor.Worker.Jobs
+namespace Modules.Processing.Application.Jobs
 {
     public class ProcessingJobs
     {

@@ -45,37 +45,15 @@ namespace Modules.Processing.Application.Services
             }
         }
 
-        //public async Task ProcessBatch(List<Record> records)
-        //{
-        //    foreach (var record in records)
-        //    {
-        //        try
-        //        {
-        //             // Simulate random failure
-        //             if (Random.Shared.Next(1, 10) == 5)
-        //                throw new Exception("Random failure");
-                    
-        //             // Simulate heavy processing
-        //            await Task.Delay(10);
-
-        //            record.MarkProcessed();
-        //        }
-        //        catch
-        //        {
-        //            record.MarkFailed();
-        //        }
-        //    }
-
-        //    await _recordRepository.AddRangeAsync(records);
-        //}
-
+        
         private async Task ProcessBatch(List<Record> records)
         {
+            var failedLogs = new List<ProcessingLog>();
+
             await Parallel.ForEachAsync(records, async (record, ct) =>
             {
                 try
                 {
-                    // Simulate work
                     await Task.Delay(10, ct);
 
                     if (Random.Shared.Next(1, 10) == 5)
@@ -83,13 +61,55 @@ namespace Modules.Processing.Application.Services
 
                     record.MarkProcessed();
                 }
-                catch
+                catch (Exception ex)
                 {
                     record.MarkFailed();
+
+                    lock (failedLogs) // thread safety
+                    {
+                        failedLogs.Add(new ProcessingLog(record.Id, ex.Message));
+                    }
                 }
             });
 
             await _recordRepository.AddRangeAsync(records);
+
+            if (failedLogs.Any())
+                await _recordRepository.AddLogsAsync(failedLogs);
+        }
+
+        
+        public async Task RetryFailedAsync()
+        {
+            var failedLogs = await _recordRepository.GetFailedLogsAsync();
+
+            var logsToUpdate = new List<ProcessingLog>();
+
+            foreach (var log in failedLogs)
+            {
+                try
+                {
+                    var record = await _recordRepository.GetByIdAsync(log.RecordId);
+
+                    if (record == null)
+                        continue;
+
+                    // Reprocess
+                    await Task.Delay(10);
+
+                    record.MarkProcessed();
+
+                    log.MarkResolved();
+                }
+                catch
+                {
+                    log.IncrementRetry();
+                }
+
+                logsToUpdate.Add(log);
+            }
+
+            await _recordRepository.UpdateLogsAsync(logsToUpdate);
         }
     }
 }

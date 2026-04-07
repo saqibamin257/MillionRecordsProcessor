@@ -10,6 +10,12 @@ namespace Modules.Processing.Application
     {
         public static IServiceCollection AddProcessingModule(this IServiceCollection services)
         {
+
+            services.AddHttpClient("external", client =>
+            {
+                client.BaseAddress = new Uri("http://localhost:5227/");
+            });
+
             services.AddScoped<ProcessingService>();
 
             return services;

@@ -13,32 +13,40 @@ namespace Processor.Worker
             _serviceProvider = serviceProvider;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+       // protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+       // {
+       //     var lastRunDate = DateTime.MinValue;
+       //     while (!stoppingToken.IsCancellationRequested)
+       //     {
+       //         var now = DateTime.Now;
+
+       //         if (now.Hour == 8 && now.Minute == 0 && lastRunDate.Date != now.Date)
+       //         {
+       //             BackgroundJob.Enqueue<ProcessingJobs>(x => x.StartProcessing());
+
+       //             lastRunDate = now;    
+       //         }
+       //         await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+       //     }            
+       //}
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var lastRunDate = DateTime.MinValue;
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var now = DateTime.Now;
+            // ✅ Daily processing at 8 AM
+            RecurringJob.AddOrUpdate<ProcessingJobs>(
+                "daily-processing-job",
+                job => job.StartProcessing(),
+                "0 8 * * *"
+            );
 
-                if (now.Hour == 8 && now.Minute == 0 && lastRunDate.Date != now.Date)
-                {
-                    BackgroundJob.Enqueue<ProcessingJobs>(x => x.StartProcessing());
+            // ✅ Retry failed every 10 minutes
+            RecurringJob.AddOrUpdate<ProcessingJobs>(
+                "retry-failed-job",
+                job => job.RetryFailed(),
+                "*/10 * * * *"
+            );
 
-                    lastRunDate = now;    
-                }
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-            }
+            return Task.CompletedTask;
         }
-
-        //protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        //{
-        //    RecurringJob.AddOrUpdate<ProcessingJobs>(
-        //        "daily-processing-job",
-        //        job => job.StartProcessing(),
-        //        "0 8 * * *"
-        //    );
-
-        //    return Task.CompletedTask;
-        //}
     }
 }
