@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Modules.Processing.Application.Pipeline;
 using Modules.Processing.Application.Services;
+using Modules.Processing.Application.Steps;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -16,6 +18,10 @@ namespace Modules.Processing.Application
                 client.BaseAddress = new Uri("http://localhost:5227/");
             });
 
+           
+            services.AddScoped<BatchProcessor>();
+            services.AddScoped<ProcessingPipeline>();
+            services.AddScoped<IProcessingStep, ProcessingStep>();
             services.AddScoped<ProcessingService>();
 
             return services;

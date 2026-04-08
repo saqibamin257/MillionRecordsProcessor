@@ -29,6 +29,12 @@ builder.Services.AddCors(options =>
                         .AllowAnyMethod());
 });
 
+
+builder.Services.AddHttpClient("external", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7261/");
+});
+
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information() // 👈 only errors globally
     .WriteTo.Console()    // optional (can keep info)

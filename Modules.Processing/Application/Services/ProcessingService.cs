@@ -2,6 +2,7 @@
 using Modules.Processing.Application.Models;
 using Modules.Records.Application.Interfaces;
 using Modules.Records.Domain;
+using Modules.Records.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Net.Http.Json;
@@ -13,103 +14,195 @@ namespace Modules.Processing.Application.Services
     public class ProcessingService
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly BatchProcessor _batchProcessor;
         private readonly IRecordRepository _recordRepository;
 
-        public ProcessingService(IHttpClientFactory httpClientFactory, IRecordRepository recordRepository) 
+        public ProcessingService(IHttpClientFactory httpClientFactory, IRecordRepository recordRepository, BatchProcessor batchProcessor)
         {
             this._httpClientFactory = httpClientFactory;
             this._recordRepository = recordRepository;
+            this._batchProcessor = batchProcessor;
         }
+
 
         public async Task StartAsync()
         {
-            var client = _httpClientFactory.CreateClient("external");
-
-            int page = 1;
-            int pageSize = 500;
-
-            while (true)
+            try 
             {
-                var data = await client.GetFromJsonAsync<List<ExternalRecordDto>>(
-                    $"api/data?page={page}&pageSize={pageSize}");
+                var client = _httpClientFactory.CreateClient("external");
 
-                if (data == null || data.Count == 0)
-                    break;
+                int page = 1;
+                int pageSize = 500;
 
-                var records = data
-                    .Select(x => new Record(x.Name, x.Email))
-                    .ToList();                
-                
-                await ProcessBatch(records);
-                page++;
+                while (true)
+                {
+                    var data = await client.GetFromJsonAsync<List<ExternalRecordDto>>(
+                        $"api/data?page={page}&pageSize={pageSize}");
+
+                    if (data == null || data.Count == 0)
+                        break;
+
+                    var records = data.Select(MapToDomain).ToList();
+
+                    await _batchProcessor.ProcessAsync(records);
+
+                    page++;
+                }
             }
-        }
-
-        
-        private async Task ProcessBatch(List<Record> records)
-        {
-            var failedLogs = new List<ProcessingLog>();
-
-            await Parallel.ForEachAsync(records, async (record, ct) =>
+            catch (Exception ex) 
             {
-                try
-                {
-                    await Task.Delay(10, ct);
-
-                    if (Random.Shared.Next(1, 10) == 5)
-                        throw new Exception("Random failure");
-
-                    record.MarkProcessed();
-                }
-                catch (Exception ex)
-                {
-                    record.MarkFailed();
-
-                    lock (failedLogs) // thread safety
-                    {
-                        failedLogs.Add(new ProcessingLog(record.Id, ex.Message));
-                    }
-                }
-            });
-
-            await _recordRepository.AddRangeAsync(records);
-
-            if (failedLogs.Any())
-                await _recordRepository.AddLogsAsync(failedLogs);
+            }            
         }
 
-        
+        private Record MapToDomain(ExternalRecordDto dto)
+            => new Record(dto.Name, dto.Email);
+
         public async Task RetryFailedAsync()
         {
-            var failedLogs = await _recordRepository.GetFailedLogsAsync();
-
-            var logsToUpdate = new List<ProcessingLog>();
-
-            foreach (var log in failedLogs)
+            try 
             {
-                try
+                var failedLogs = await _recordRepository.GetFailedLogsAsync();
+
+                var throttler = new SemaphoreSlim(5);
+
+                var tasks = failedLogs.Select(async log =>
                 {
-                    var record = await _recordRepository.GetByIdAsync(log.RecordId);
+                    await throttler.WaitAsync();
+                    try
+                    {
+                        var record = await _recordRepository.GetByIdAsync(log.RecordId);
 
-                    if (record == null)
-                        continue;
+                        if (record == null) return;
 
-                    // Reprocess
-                    await Task.Delay(10);
+                        await Task.Delay(10);
 
-                    record.MarkProcessed();
+                        record.MarkProcessed();
+                        log.MarkResolved();
+                    }
+                    catch
+                    {
+                        log.IncrementRetry();
+                    }
+                    finally
+                    {
+                        throttler.Release();
+                    }
+                });
 
-                    log.MarkResolved();
-                }
-                catch
-                {
-                    log.IncrementRetry();
-                }
+                await Task.WhenAll(tasks);
 
-                logsToUpdate.Add(log);
+                await _recordRepository.UpdateLogsAsync(failedLogs);
             }
-
-            await _recordRepository.UpdateLogsAsync(logsToUpdate);
+            catch (Exception ex) { }            
         }
     }
+
+
+
+
+
+
+
+    //public class ProcessingService
+    //{
+    //    private readonly IHttpClientFactory _httpClientFactory;
+    //    private readonly IRecordRepository _recordRepository;
+
+    //    public ProcessingService(IHttpClientFactory httpClientFactory, IRecordRepository recordRepository) 
+    //    {
+    //        this._httpClientFactory = httpClientFactory;
+    //        this._recordRepository = recordRepository;
+    //    }
+
+    //public async Task StartAsync()
+    //{
+    //    var client = _httpClientFactory.CreateClient("external");
+
+    //    int page = 1;
+    //    int pageSize = 500;
+
+    //    while (true)
+    //    {
+    //        var data = await client.GetFromJsonAsync<List<ExternalRecordDto>>(
+    //            $"api/data?page={page}&pageSize={pageSize}");
+
+    //        if (data == null || data.Count == 0)
+    //            break;
+
+    //        var records = data
+    //            .Select(x => new Record(x.Name, x.Email))
+    //            .ToList();                
+
+    //        await ProcessBatch(records);
+    //        page++;
+    //    }
+    //}
+
+
+    //private async Task ProcessBatch(List<Record> records)
+    //{
+    //    var failedLogs = new List<ProcessingLog>();
+
+    //    await Parallel.ForEachAsync(records, async (record, ct) =>
+    //    {
+    //        try
+    //        {
+    //            await Task.Delay(10, ct);
+
+    //            if (Random.Shared.Next(1, 10) == 5)
+    //                throw new Exception("Random failure");
+
+    //            record.MarkProcessed();
+    //        }
+    //        catch (Exception ex)
+    //        {
+    //            record.MarkFailed();
+
+    //            lock (failedLogs) // thread safety
+    //            {
+    //                failedLogs.Add(new ProcessingLog(record.Id, ex.Message));
+    //            }
+    //        }
+    //    });
+
+    //    await _recordRepository.AddRangeAsync(records);
+
+    //    if (failedLogs.Any())
+    //        await _recordRepository.AddLogsAsync(failedLogs);
+    //}
+
+
+    //public async Task RetryFailedAsync()
+    //{
+    //    var failedLogs = await _recordRepository.GetFailedLogsAsync();
+
+    //    var logsToUpdate = new List<ProcessingLog>();
+
+    //    foreach (var log in failedLogs)
+    //    {
+    //        try
+    //        {
+    //            var record = await _recordRepository.GetByIdAsync(log.RecordId);
+
+    //            if (record == null)
+    //                continue;
+
+    //            // Reprocess
+    //            await Task.Delay(10);
+
+    //            record.MarkProcessed();
+
+    //            log.MarkResolved();
+    //        }
+    //        catch
+    //        {
+    //            log.IncrementRetry();
+    //        }
+
+    //        logsToUpdate.Add(log);
+    //    }
+
+    //    await _recordRepository.UpdateLogsAsync(logsToUpdate);
+    //}
+    // }
 }

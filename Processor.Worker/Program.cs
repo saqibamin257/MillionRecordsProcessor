@@ -17,7 +17,11 @@ var connectionString = builder.Configuration.GetConnectionString("Default");
 builder.Services.AddHangfire(config =>
     config.UseSqlServerStorage(connectionString));
 
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = Environment.ProcessorCount * 2;
+    options.Queues = new[] { "processing", "retry", "default" };
+});
 
 // 🔹 Register modules
 builder.Services.AddProcessingModule();
@@ -25,6 +29,13 @@ builder.Services.AddRecordsModule(connectionString);
 
 // 🔹 Register jobs
 builder.Services.AddScoped<ProcessingJobs>();
+
+
+builder.Services.AddHttpClient("external", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7261/");
+});
+
 
 
 // Configure Serilog

@@ -26,46 +26,48 @@ namespace Modules.Records.Infrastructure
         }
         public async Task AddRangeAsync(List<Record> records)
         {
-            var table = new DataTable();
-
-            table.Columns.Add("Id", typeof(Guid));
-            table.Columns.Add("Name", typeof(string));
-            table.Columns.Add("Email", typeof(string));
-            table.Columns.Add("Status", typeof(string));
-            table.Columns.Add("ProcessedAt", typeof(DateTime));
-
-            foreach (var r in records)
+            try 
             {
-                table.Rows.Add(
-                    r.Id,
-                    r.Name,
-                    r.Email,
-                    r.Status,
-                    r.ProcessedAt ?? (object)DBNull.Value
-                );
-            }
+                var table = new DataTable();
 
-            var connection = (SqlConnection)_db.Database.GetDbConnection();
+                table.Columns.Add("Id", typeof(Guid));
+                table.Columns.Add("Name", typeof(string));
+                table.Columns.Add("Email", typeof(string));
+                table.Columns.Add("Status", typeof(string));
+                table.Columns.Add("ProcessedAt", typeof(DateTime));
 
-            if (connection.State != ConnectionState.Open)
-                await connection.OpenAsync();
-
-            using var transaction = await _db.Database.BeginTransactionAsync();
-
-            try
-            {
-                var dbTransaction = (SqlTransaction)transaction.GetDbTransaction();
-
-                using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, dbTransaction)
+                foreach (var r in records)
                 {
-                    DestinationTableName = "Records_Staging"
-                };
+                    table.Rows.Add(
+                        r.Id,
+                        r.Name,
+                        r.Email,
+                        r.Status,
+                        r.ProcessedAt ?? (object)DBNull.Value
+                    );
+                }
 
-                // 1. Bulk insert → staging
-                await bulkCopy.WriteToServerAsync(table);
+                var connection = (SqlConnection)_db.Database.GetDbConnection();
 
-                // 2. Insert only new records
-                await _db.Database.ExecuteSqlRawAsync(@"
+                if (connection.State != ConnectionState.Open)
+                    await connection.OpenAsync();
+
+                using var transaction = await _db.Database.BeginTransactionAsync();
+
+                try
+                {
+                    var dbTransaction = (SqlTransaction)transaction.GetDbTransaction();
+
+                    using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, dbTransaction)
+                    {
+                        DestinationTableName = "Records_Staging"
+                    };
+
+                    // 1. Bulk insert → staging
+                    await bulkCopy.WriteToServerAsync(table);
+
+                    // 2. Insert only new records
+                    await _db.Database.ExecuteSqlRawAsync(@"
                                                     INSERT INTO Records (Id, Name, Email, Status, ProcessedAt)
                                                     SELECT s.Id, s.Name, s.Email, s.Status, s.ProcessedAt
                                                     FROM Records_Staging s
@@ -73,21 +75,26 @@ namespace Modules.Records.Infrastructure
                                                     WHERE r.Email IS NULL
                                                 ");
 
-                // 3. Clear staging
-                await _db.Database.ExecuteSqlRawAsync("DELETE FROM Records_Staging");
-                await transaction.CommitAsync();
+                    // 3. Clear staging
+                    await _db.Database.ExecuteSqlRawAsync("DELETE FROM Records_Staging");
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Error while bulk inserting records batch. Count: {Count}", records.Count);
+                    //throw;
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) 
             {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Error while bulk inserting records batch. Count: {Count}", records.Count);
-                //throw;
-            }
+                _logger.LogError(ex.Message);
+            }            
         }
 
         public  Task<int> GetProcessedCountAsync()
         {
-           return _db.Records.CountAsync(x => x.Status == "Processed");
+         return _db.Records.CountAsync(x => x.Status == "Processed");
         }
 
         public Task<int> GetTotalCountAsync()
@@ -102,19 +109,45 @@ namespace Modules.Records.Infrastructure
 
         public async Task<List<ProcessingLog>> GetFailedLogsAsync()
         {
-            return await _db.ProcessingLogs
-                .Where(x => x.Status == "Failed" && x.RetryCount < 3)
-                .ToListAsync();
+            try 
+            {
+                var logs = await _db.ProcessingLogs.Where(x => x.Status == "Failed" && x.RetryCount < 3).ToListAsync();
+                return logs ?? new List<ProcessingLog>();
+            }
+            catch (Exception ex) 
+            {
+                _logger.LogError(ex.Message);
+                return null;                
+            }
+            
+            //return await _db.ProcessingLogs
+            //    .Where(x => x.Status == "Failed" && x.RetryCount < 3)
+            //    .ToListAsync();
         }
         public async Task<Record?> GetByIdAsync(Guid id)
         {
-            return await _db.Records.FindAsync(id);
+            try 
+            { 
+                return await _db.Records.FindAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message);
+                return null;
+            }            
         }
 
         public async Task UpdateLogsAsync(List<ProcessingLog> logs)
         {
-            _db.ProcessingLogs.UpdateRange(logs);
-            await _db.SaveChangesAsync();
+            try 
+            {
+                _db.ProcessingLogs.UpdateRange(logs);
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception ex) 
+            {
+                _logger.LogError(ex.Message);                
+            }            
         }
     }
 }

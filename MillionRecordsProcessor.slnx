@@ -5,7 +5,6 @@
     <Project Path="Processor.Worker/Processor.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
-    <Project Path="Modules.Dashboard/Modules.Dashboard.csproj" />
     <Project Path="Modules.Processing/Modules.Processing.csproj" />
     <Project Path="Modules.Records/Modules.Records.csproj" />
   </Folder>

@@ -20,7 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Modules.Dashboard\Modules.Dashboard.csproj" />
     <ProjectReference Include="..\Modules.Processing\Modules.Processing.csproj" />
     <ProjectReference Include="..\Modules.Records\Modules.Records.csproj" />
   </ItemGroup>

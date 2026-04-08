@@ -1,7 +1,9 @@
 ﻿using Modules.Processing.Application.Services;
+using Hangfire;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Serilog.Context;
 
 namespace Modules.Processing.Application.Jobs
 {
@@ -14,13 +16,25 @@ namespace Modules.Processing.Application.Jobs
             _service = service;
         }
 
+
+        [AutomaticRetry(Attempts = 3)]
+        [Queue("processing")]
         public async Task StartProcessing()
         {
-            await _service.StartAsync();
+            using (LogContext.PushProperty("JobName", "DailyProcessing"))
+            {
+                await _service.StartAsync();
+            }
+            
         }
+        [AutomaticRetry(Attempts = 5)]
+        [Queue("retry")]
         public async Task RetryFailed()
         {
-            await _service.RetryFailedAsync();
+            using (LogContext.PushProperty("JobName", "RetryFailed"))
+            {
+                await _service.RetryFailedAsync();
+            }
         }
     }
 }
