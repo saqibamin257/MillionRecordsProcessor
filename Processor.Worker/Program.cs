@@ -29,12 +29,12 @@ builder.Services.AddScoped<ProcessingJobs>();
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information() // 👈 only errors globally
+    .MinimumLevel.Information() // information globally
     .WriteTo.Console()    // optional (can keep info)
     .WriteTo.File(
         "logs/error-log-.txt",
         rollingInterval: RollingInterval.Day,
-        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Error, // 👈 only errors in file
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Error, //  only errors in file
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level}] {Message}{NewLine}{Exception}"
     )
     .CreateLogger();
